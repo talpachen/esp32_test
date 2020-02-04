@@ -31,7 +31,24 @@ static const int CONNECTED_BIT = BIT0;
 static const int ESPTOUCH_DONE_BIT = BIT1;
 static const char *TAG = "smartconfig_example";
 
-static void smartconfig_example_task(void * parm);
+static void smartconfig_example_task(void * parm)
+{
+    EventBits_t uxBits;
+    ESP_ERROR_CHECK( esp_smartconfig_set_type(SC_TYPE_ESPTOUCH) );
+    smartconfig_start_config_t cfg = SMARTCONFIG_START_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK( esp_smartconfig_start(&cfg) );
+    while (1) {
+        uxBits = xEventGroupWaitBits(s_wifi_event_group, CONNECTED_BIT | ESPTOUCH_DONE_BIT, true, false, portMAX_DELAY); 
+        if(uxBits & CONNECTED_BIT) {
+            ESP_LOGI(TAG, "WiFi Connected to ap");
+        }
+        if(uxBits & ESPTOUCH_DONE_BIT) {
+            ESP_LOGI(TAG, "smartconfig over");
+            esp_smartconfig_stop();
+            vTaskDelete(NULL);
+        }
+    }
+}
 
 static void event_handler(void* arg, esp_event_base_t event_base, 
                                 int32_t event_id, void* event_data)
@@ -78,11 +95,11 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 
 static void initialise_wifi(void)
 {
-    ESP_ERROR_CHECK(esp_netif_init());
     s_wifi_event_group = xEventGroupCreate();
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
-    assert(sta_netif);
+
+    ESP_ERROR_CHECK( esp_netif_init() );
+    ESP_ERROR_CHECK( esp_event_loop_create_default() );
+    assert(esp_netif_create_default_wifi_sta());
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
@@ -95,28 +112,17 @@ static void initialise_wifi(void)
     ESP_ERROR_CHECK( esp_wifi_start() );
 }
 
-static void smartconfig_example_task(void * parm)
-{
-    EventBits_t uxBits;
-    ESP_ERROR_CHECK( esp_smartconfig_set_type(SC_TYPE_ESPTOUCH) );
-    smartconfig_start_config_t cfg = SMARTCONFIG_START_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK( esp_smartconfig_start(&cfg) );
-    while (1) {
-        uxBits = xEventGroupWaitBits(s_wifi_event_group, CONNECTED_BIT | ESPTOUCH_DONE_BIT, true, false, portMAX_DELAY); 
-        if(uxBits & CONNECTED_BIT) {
-            ESP_LOGI(TAG, "WiFi Connected to ap");
-        }
-        if(uxBits & ESPTOUCH_DONE_BIT) {
-            ESP_LOGI(TAG, "smartconfig over");
-            esp_smartconfig_stop();
-            vTaskDelete(NULL);
-        }
-    }
-}
-
 void app_main(void)
 {
-    ESP_ERROR_CHECK( nvs_flash_init() );
+    //Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+      ESP_ERROR_CHECK(nvs_flash_erase());
+      ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    ESP_LOGI(TAG, "ESP_WIFI: STA + SmartConfig");
     initialise_wifi();
 }
 
