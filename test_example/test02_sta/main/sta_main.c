@@ -18,6 +18,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "esp_netif.h"
 #include "esp_smartconfig.h"
 
@@ -50,11 +51,98 @@ static void smartconfig_example_task(void * parm)
     }
 }
 
+
+static bool nvs_get_wifi_config(wifi_config_t *wifi_config)
+{
+    bool ret = false;
+    esp_err_t err;
+    nvs_handle_t nvs_handle;
+    size_t required_size = sizeof(wifi_config_t);
+
+    ESP_LOGI(TAG, "nvs_get_wifi_config");
+
+    err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK)
+    {
+        ESP_LOGI(TAG, "nvs_open fail");
+        return ret;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "nvs_open success");
+    }
+
+    uint32_t* buf = malloc(required_size);
+    err = nvs_get_blob(nvs_handle, "wifi_config", buf, &required_size);
+    if (err == ESP_OK)
+    {
+        ESP_LOGI(TAG, "nvs_get_blob success");
+        memcpy(wifi_config, buf, required_size);
+        ret = true;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "nvs_get_blob fail");
+    }
+    free(buf);
+
+    nvs_close(nvs_handle);
+    return ret;
+}
+
+static bool nvs_set_wifi_config(wifi_config_t *wifi_config)
+{
+    bool ret = false;
+    esp_err_t err;
+    nvs_handle_t nvs_handle;
+    size_t required_size = sizeof(wifi_config_t);
+
+    ESP_LOGI(TAG, "nvs_set_wifi_config");
+
+    err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK)
+    {
+        ESP_LOGI(TAG, "nvs_open fail");
+        return ret;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "nvs_open success");
+    }
+
+
+    uint32_t* buf = malloc(required_size);
+    memcpy(buf, wifi_config, required_size);
+    err = nvs_set_blob(nvs_handle, "wifi_config", buf, required_size);
+    if (err == ESP_OK)
+    {
+        ESP_LOGI(TAG, "nvs_set_blob success");
+        ret = true;
+    }
+    else
+    {
+        ESP_LOGI(TAG, "nvs_set_blob fail");
+    }
+    free(buf);
+
+    nvs_close(nvs_handle);
+    return ret;
+}
+
+static bool wifi_config_valid = false;
+
 static void event_handler(void* arg, esp_event_base_t event_base, 
                                 int32_t event_id, void* event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        xTaskCreate(smartconfig_example_task, "smartconfig_example_task", 4096, NULL, 3, NULL);
+        if (wifi_config_valid)
+        {
+            esp_wifi_connect();
+        }
+        else
+        {
+            xTaskCreate(smartconfig_example_task, "smartconfig_example_task", 4096, NULL, 3, NULL);
+        }
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         esp_wifi_connect();
         xEventGroupClearBits(s_wifi_event_group, CONNECTED_BIT);
@@ -85,6 +173,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "SSID:%s", ssid);
         ESP_LOGI(TAG, "PASSWORD:%s", password);
 
+        nvs_set_wifi_config(&wifi_config);
+
         ESP_ERROR_CHECK( esp_wifi_disconnect() );
         ESP_ERROR_CHECK( esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
         ESP_ERROR_CHECK( esp_wifi_connect() );
@@ -95,6 +185,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 
 static void initialise_wifi(void)
 {
+    wifi_config_t wifi_config;
+    wifi_config_valid = nvs_get_wifi_config(&wifi_config);
+
     s_wifi_event_group = xEventGroupCreate();
 
     ESP_ERROR_CHECK( esp_netif_init() );
@@ -106,9 +199,12 @@ static void initialise_wifi(void)
 
     ESP_ERROR_CHECK( esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL) );
     ESP_ERROR_CHECK( esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL) );
-    ESP_ERROR_CHECK( esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL) );
+    if (!wifi_config_valid)
+        ESP_ERROR_CHECK( esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL) );
 
     ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
+    if (wifi_config_valid)
+        ESP_ERROR_CHECK( esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
     ESP_ERROR_CHECK( esp_wifi_start() );
 }
 
