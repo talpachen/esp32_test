@@ -1,224 +1,127 @@
-/* Esptouch example
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-
 #include <string.h>
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
-#include "esp_wifi.h"
-#include "esp_wpa2.h"
+#include "esp_netif.h"
+#include "esp_eth.h"
 #include "esp_event.h"
 #include "esp_log.h"
-#include "esp_system.h"
-#include "nvs_flash.h"
-#include "nvs.h"
-#include "esp_netif.h"
-#include "esp_smartconfig.h"
+#include "sdkconfig.h"
 
-/* FreeRTOS event group to signal when we are connected & ready to make a request */
-static EventGroupHandle_t s_wifi_event_group;
+static const char *TAG = "usrapp_main";
 
-/* The event group allows multiple bits for each event,
-   but we only care about one event - are we connected
-   to the AP with an IP? */
-static const int CONNECTED_BIT = BIT0;
-static const int ESPTOUCH_DONE_BIT = BIT1;
-static const char *TAG = "smartconfig_example";
 
-static void smartconfig_example_task(void * parm)
+/** Event handler for Ethernet events */
+static void eth_event_handler(void *arg, esp_event_base_t event_base,
+                              int32_t event_id, void *event_data)
 {
-    EventBits_t uxBits;
-    ESP_ERROR_CHECK( esp_smartconfig_set_type(SC_TYPE_ESPTOUCH) );
-    smartconfig_start_config_t cfg = SMARTCONFIG_START_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK( esp_smartconfig_start(&cfg) );
-    while (1) {
-        uxBits = xEventGroupWaitBits(s_wifi_event_group, CONNECTED_BIT | ESPTOUCH_DONE_BIT, true, false, portMAX_DELAY); 
-        if(uxBits & CONNECTED_BIT) {
-            ESP_LOGI(TAG, "WiFi Connected to ap");
-        }
-        if(uxBits & ESPTOUCH_DONE_BIT) {
-            ESP_LOGI(TAG, "smartconfig over");
-            esp_smartconfig_stop();
-            vTaskDelete(NULL);
-        }
+    uint8_t mac_addr[6] = {0};
+    /* we can get the ethernet driver handle from event data */
+    esp_eth_handle_t eth_handle = *(esp_eth_handle_t *)event_data;
+
+    switch (event_id) {
+    case ETHERNET_EVENT_CONNECTED:
+        esp_eth_ioctl(eth_handle, ETH_CMD_G_MAC_ADDR, mac_addr);
+        ESP_LOGI(TAG, "Ethernet Link Up");
+        ESP_LOGI(TAG, "Ethernet HW Addr %02x:%02x:%02x:%02x:%02x:%02x",
+                 mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+        break;
+    case ETHERNET_EVENT_DISCONNECTED:
+        ESP_LOGI(TAG, "Ethernet Link Down");
+        break;
+    case ETHERNET_EVENT_START:
+        ESP_LOGI(TAG, "Ethernet Started");
+        break;
+    case ETHERNET_EVENT_STOP:
+        ESP_LOGI(TAG, "Ethernet Stopped");
+        break;
+    default:
+        break;
     }
 }
 
-
-static bool nvs_get_wifi_config(wifi_config_t *wifi_config)
+/** Event handler for IP_EVENT_ETH_GOT_IP */
+static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
+                                 int32_t event_id, void *event_data)
 {
-    bool ret = false;
-    esp_err_t err;
-    nvs_handle_t nvs_handle;
-    size_t required_size = sizeof(wifi_config_t);
+    ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
+    const esp_netif_ip_info_t *ip_info = &event->ip_info;
 
-    ESP_LOGI(TAG, "nvs_get_wifi_config");
-
-    err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
-    if (err != ESP_OK)
-    {
-        ESP_LOGI(TAG, "nvs_open fail");
-        return ret;
-    }
-    else
-    {
-        ESP_LOGI(TAG, "nvs_open success");
-    }
-
-    uint32_t* buf = malloc(required_size);
-    err = nvs_get_blob(nvs_handle, "wifi_config", buf, &required_size);
-    if (err == ESP_OK)
-    {
-        ESP_LOGI(TAG, "nvs_get_blob success");
-        memcpy(wifi_config, buf, required_size);
-        ret = true;
-    }
-    else
-    {
-        ESP_LOGI(TAG, "nvs_get_blob fail");
-    }
-    free(buf);
-
-    nvs_close(nvs_handle);
-    return ret;
-}
-
-static bool nvs_set_wifi_config(wifi_config_t *wifi_config)
-{
-    bool ret = false;
-    esp_err_t err;
-    nvs_handle_t nvs_handle;
-    size_t required_size = sizeof(wifi_config_t);
-
-    ESP_LOGI(TAG, "nvs_set_wifi_config");
-
-    err = nvs_open("storage", NVS_READWRITE, &nvs_handle);
-    if (err != ESP_OK)
-    {
-        ESP_LOGI(TAG, "nvs_open fail");
-        return ret;
-    }
-    else
-    {
-        ESP_LOGI(TAG, "nvs_open success");
-    }
-
-
-    uint32_t* buf = malloc(required_size);
-    memcpy(buf, wifi_config, required_size);
-    err = nvs_set_blob(nvs_handle, "wifi_config", buf, required_size);
-    if (err == ESP_OK)
-    {
-        ESP_LOGI(TAG, "nvs_set_blob success");
-        ret = true;
-    }
-    else
-    {
-        ESP_LOGI(TAG, "nvs_set_blob fail");
-    }
-    free(buf);
-
-    nvs_close(nvs_handle);
-    return ret;
-}
-
-static bool wifi_config_valid = false;
-
-static void event_handler(void* arg, esp_event_base_t event_base, 
-                                int32_t event_id, void* event_data)
-{
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        if (wifi_config_valid)
-        {
-            esp_wifi_connect();
-        }
-        else
-        {
-            xTaskCreate(smartconfig_example_task, "smartconfig_example_task", 4096, NULL, 3, NULL);
-        }
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        esp_wifi_connect();
-        xEventGroupClearBits(s_wifi_event_group, CONNECTED_BIT);
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        xEventGroupSetBits(s_wifi_event_group, CONNECTED_BIT);
-    } else if (event_base == SC_EVENT && event_id == SC_EVENT_SCAN_DONE) {
-        ESP_LOGI(TAG, "Scan done");
-    } else if (event_base == SC_EVENT && event_id == SC_EVENT_FOUND_CHANNEL) {
-        ESP_LOGI(TAG, "Found channel");
-    } else if (event_base == SC_EVENT && event_id == SC_EVENT_GOT_SSID_PSWD) {
-        ESP_LOGI(TAG, "Got SSID and password");
-
-        smartconfig_event_got_ssid_pswd_t *evt = (smartconfig_event_got_ssid_pswd_t *)event_data;
-        wifi_config_t wifi_config;
-        uint8_t ssid[33] = { 0 };
-        uint8_t password[65] = { 0 };
-
-        bzero(&wifi_config, sizeof(wifi_config_t));
-        memcpy(wifi_config.sta.ssid, evt->ssid, sizeof(wifi_config.sta.ssid));
-        memcpy(wifi_config.sta.password, evt->password, sizeof(wifi_config.sta.password));
-        wifi_config.sta.bssid_set = evt->bssid_set;
-        if (wifi_config.sta.bssid_set == true) {
-            memcpy(wifi_config.sta.bssid, evt->bssid, sizeof(wifi_config.sta.bssid));
-        }
-
-        memcpy(ssid, evt->ssid, sizeof(evt->ssid));
-        memcpy(password, evt->password, sizeof(evt->password));
-        ESP_LOGI(TAG, "SSID:%s", ssid);
-        ESP_LOGI(TAG, "PASSWORD:%s", password);
-
-        nvs_set_wifi_config(&wifi_config);
-
-        ESP_ERROR_CHECK( esp_wifi_disconnect() );
-        ESP_ERROR_CHECK( esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
-        ESP_ERROR_CHECK( esp_wifi_connect() );
-    } else if (event_base == SC_EVENT && event_id == SC_EVENT_SEND_ACK_DONE) {
-        xEventGroupSetBits(s_wifi_event_group, ESPTOUCH_DONE_BIT);
-    }
-}
-
-static void initialise_wifi(void)
-{
-    wifi_config_t wifi_config;
-    wifi_config_valid = nvs_get_wifi_config(&wifi_config);
-
-    s_wifi_event_group = xEventGroupCreate();
-
-    ESP_ERROR_CHECK( esp_netif_init() );
-    ESP_ERROR_CHECK( esp_event_loop_create_default() );
-    assert(esp_netif_create_default_wifi_sta());
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK( esp_wifi_init(&cfg) );
-
-    ESP_ERROR_CHECK( esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL) );
-    ESP_ERROR_CHECK( esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL) );
-    if (!wifi_config_valid)
-        ESP_ERROR_CHECK( esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL) );
-
-    ESP_ERROR_CHECK( esp_wifi_set_mode(WIFI_MODE_STA) );
-    if (wifi_config_valid)
-        ESP_ERROR_CHECK( esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config) );
-    ESP_ERROR_CHECK( esp_wifi_start() );
+    ESP_LOGI(TAG, "Ethernet Got IP Address");
+    ESP_LOGI(TAG, "~~~~~~~~~~~");
+    ESP_LOGI(TAG, "ETHIP:" IPSTR, IP2STR(&ip_info->ip));
+    ESP_LOGI(TAG, "ETHMASK:" IPSTR, IP2STR(&ip_info->netmask));
+    ESP_LOGI(TAG, "ETHGW:" IPSTR, IP2STR(&ip_info->gw));
+    ESP_LOGI(TAG, "~~~~~~~~~~~");
 }
 
 void app_main(void)
 {
-    //Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+    // Initialize TCP/IP network interface (should be called only once in application)
+    ESP_ERROR_CHECK(esp_netif_init());
+    // Create default event loop that running in background
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
+    esp_netif_t *eth_netif = esp_netif_new(&cfg);
+    // Set default handlers to process TCP/IP stuffs
+    ESP_ERROR_CHECK(esp_eth_set_default_handlers(eth_netif));
+    // Register user defined event handers
+    ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &got_ip_event_handler, NULL));
 
-    ESP_LOGI(TAG, "ESP_WIFI: STA + SmartConfig");
-    initialise_wifi();
+    eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
+    eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
+    phy_config.phy_addr = CONFIG_EXAMPLE_ETH_PHY_ADDR;
+    phy_config.reset_gpio_num = CONFIG_EXAMPLE_ETH_PHY_RST_GPIO;
+#if CONFIG_EXAMPLE_USE_INTERNAL_ETHERNET
+    mac_config.smi_mdc_gpio_num = CONFIG_EXAMPLE_ETH_MDC_GPIO;
+    mac_config.smi_mdio_gpio_num = CONFIG_EXAMPLE_ETH_MDIO_GPIO;
+    esp_eth_mac_t *mac = esp_eth_mac_new_esp32(&mac_config);
+#if CONFIG_EXAMPLE_ETH_PHY_IP101
+    esp_eth_phy_t *phy = esp_eth_phy_new_ip101(&phy_config);
+#elif CONFIG_EXAMPLE_ETH_PHY_RTL8201
+    esp_eth_phy_t *phy = esp_eth_phy_new_rtl8201(&phy_config);
+#elif CONFIG_EXAMPLE_ETH_PHY_LAN8720
+    esp_eth_phy_t *phy = esp_eth_phy_new_lan8720(&phy_config);
+#elif CONFIG_EXAMPLE_ETH_PHY_DP83848
+    esp_eth_phy_t *phy = esp_eth_phy_new_dp83848(&phy_config);
+#endif
+#elif CONFIG_EXAMPLE_USE_DM9051
+    gpio_install_isr_service(0);
+    spi_device_handle_t spi_handle = NULL;
+    spi_bus_config_t buscfg = {
+        .miso_io_num = CONFIG_EXAMPLE_DM9051_MISO_GPIO,
+        .mosi_io_num = CONFIG_EXAMPLE_DM9051_MOSI_GPIO,
+        .sclk_io_num = CONFIG_EXAMPLE_DM9051_SCLK_GPIO,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+    };
+    ESP_ERROR_CHECK(spi_bus_initialize(CONFIG_EXAMPLE_DM9051_SPI_HOST, &buscfg, 1));
+    spi_device_interface_config_t devcfg = {
+        .command_bits = 1,
+        .address_bits = 7,
+        .mode = 0,
+        .clock_speed_hz = CONFIG_EXAMPLE_DM9051_SPI_CLOCK_MHZ * 1000 * 1000,
+        .spics_io_num = CONFIG_EXAMPLE_DM9051_CS_GPIO,
+        .queue_size = 20
+    };
+    ESP_ERROR_CHECK(spi_bus_add_device(CONFIG_EXAMPLE_DM9051_SPI_HOST, &devcfg, &spi_handle));
+    /* dm9051 ethernet driver is based on spi driver */
+    eth_dm9051_config_t dm9051_config = ETH_DM9051_DEFAULT_CONFIG(spi_handle);
+    dm9051_config.int_gpio_num = CONFIG_EXAMPLE_DM9051_INT_GPIO;
+    esp_eth_mac_t *mac = esp_eth_mac_new_dm9051(&dm9051_config, &mac_config);
+    esp_eth_phy_t *phy = esp_eth_phy_new_dm9051(&phy_config);
+#elif CONFIG_EXAMPLE_USE_OPENETH
+    phy_config.autonego_timeout_ms = 100;
+    esp_eth_mac_t *mac = esp_eth_mac_new_openeth(&mac_config);
+    esp_eth_phy_t *phy = esp_eth_phy_new_dp83848(&phy_config);
+#endif
+    esp_eth_config_t config = ETH_DEFAULT_CONFIG(mac, phy);
+    esp_eth_handle_t eth_handle = NULL;
+    ESP_ERROR_CHECK(esp_eth_driver_install(&config, &eth_handle));
+    /* attach Ethernet driver to TCP/IP stack */
+    ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle)));
+    /* start Ethernet driver state machine */
+    ESP_ERROR_CHECK(esp_eth_start(eth_handle));
 }
-
