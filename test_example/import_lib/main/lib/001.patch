@@ -1,0 +1,44 @@
+ source/vsf/hal/arch/rtos/freertos/CMakeLists.txt | 2 +-
+ source/vsf/hal/vsf_hal.h                         | 4 ++++
+ source/vsf/service/json/vsf_json.c               | 2 +-
+ 3 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/source/vsf/hal/arch/rtos/freertos/CMakeLists.txt b/source/vsf/hal/arch/rtos/freertos/CMakeLists.txt
+index 7fbd7dd9a..0fabb4d82 100644
+--- a/source/vsf/hal/arch/rtos/freertos/CMakeLists.txt
++++ b/source/vsf/hal/arch/rtos/freertos/CMakeLists.txt
+@@ -1,5 +1,5 @@
+ # CMakeLists head
+ 
+ target_sources(vsf INTERFACE
+-    freertos_generic.c
++    freertos_model.c
+ )
+diff --git a/source/vsf/hal/vsf_hal.h b/source/vsf/hal/vsf_hal.h
+index a57bc07db..3168cf17c 100644
+--- a/source/vsf/hal/vsf_hal.h
++++ b/source/vsf/hal/vsf_hal.h
+@@ -23,6 +23,10 @@
+ #   include "./driver/driver.h"
+ #   include "./driver/common/common.h"
+ 
++// fix "error: implicit declaration of function 'vsf_hal_init'"
++extern bool vsf_hal_init(void);
++extern bool vsf_osa_hal_init(void);
++
+ #else
+ 
+ #   ifndef __VSF_HAL_H__
+diff --git a/source/vsf/service/json/vsf_json.c b/source/vsf/service/json/vsf_json.c
+index 95762e530..5c037bf51 100644
+--- a/source/vsf/service/json/vsf_json.c
++++ b/source/vsf/service/json/vsf_json.c
+@@ -187,7 +187,7 @@ int vsf_json_num_of_entry(const char *json)
+ char *vsf_json_get(const char *json, const char *key)
+ {
+     vsf_json_enumerator_t e;
+-    unsigned long idx, curidx;
++    unsigned long idx, curidx = 0;
+     char *cur;
+ 
+     if (vsf_json_isdiv(*key)) {
