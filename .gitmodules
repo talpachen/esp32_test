@@ -2,3 +2,6 @@
 	path = esp-idf
 	url = https://github.com/espressif/esp-idf.git
 	branch = release/v4.1
+[submodule "test_example/import_lib/main/lib/vsf_dev"]
+	path = test_example/import_lib/main/lib/vsf_dev
+	url = git@git.code.tencent.com:vsfteam/vsf_dev.git
