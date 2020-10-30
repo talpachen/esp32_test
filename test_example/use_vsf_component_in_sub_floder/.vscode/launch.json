@@ -1,0 +1,36 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "gdb",
+            "request": "launch",
+            "name": "Qemu Debug Bootloader",
+            "gdbpath": "${config:idf.xtensaEsp32Path}/bin/xtensa-esp32-elf-gdb",
+            "target": "${workspaceFolder}/build/bootloader/bootloader.elf",
+            "cwd": "${workspaceFolder}",
+            "autorun": [
+                "target remote :1234",
+                "monitor system_reset",
+                "tb call_start_cpu0",
+                "c",
+            ],
+        },
+        {
+            "type": "gdb",
+            "request": "launch",
+            "name": "Qemu Debug App",
+            "gdbpath": "${config:idf.xtensaEsp32Path}/bin/xtensa-esp32-elf-gdb",
+            "target": "${workspaceFolder}/build/${config:idf.projectName}.elf",
+            "cwd": "${workspaceFolder}",
+            "autorun": [
+                "target remote :1234",
+                "monitor system_reset",
+                "tb call_start_cpu0",
+                "c",
+            ],
+        }
+    ]
+}

@@ -5,3 +5,6 @@
 [submodule "test_example/import_lib/main/lib/vsf_dev"]
 	path = test_example/import_lib/main/lib/vsf_dev
 	url = git@git.code.tencent.com:vsfteam/vsf_dev.git
+[submodule "test_example/use_vsf_component_in_sub_floder/main/vsf_dev"]
+	path = test_example/use_vsf_component_in_sub_floder/main/vsf_dev
+	url = git@git.code.tencent.com:vsfteam/vsf_dev.git
