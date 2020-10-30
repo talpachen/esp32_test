@@ -26,7 +26,7 @@
 void app_main(void)
 {
     vsf_evtq_on_eda_init(NULL);
-    //vsf_pool_init(NULL, 0, 0, NULL);
+    vsf_pool_init(NULL, 0, 0, NULL);
 
     printf("Hello world!\n");
 
