@@ -13,6 +13,8 @@
 #include "esp_system.h"
 #include "esp_spi_flash.h"
 
+#include "vsf.h"
+
 #ifdef CONFIG_IDF_TARGET_ESP32
 #define CHIP_NAME "ESP32"
 #endif
@@ -23,6 +25,9 @@
 
 void app_main(void)
 {
+    vsf_evtq_on_eda_init(NULL);
+    //vsf_pool_init(NULL, 0, 0, NULL);
+
     printf("Hello world!\n");
 
     /* Print chip information */
