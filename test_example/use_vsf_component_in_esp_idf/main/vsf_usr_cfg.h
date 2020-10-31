@@ -56,6 +56,10 @@
 #define WEAK_VSF_HEAP_MALLOC_ALIGNED
 
 
+#define VSF_OS_CFG_MAIN_MODE                             VSF_OS_CFG_MAIN_MODE_NONE
+#define VSF_KERNEL_CFG_SUPPORT_THREAD   DISABLED
+#define VSF_USE_KERNEL                  ENABLED
+
 /*============================ TYPES =========================================*/
 /*============================ GLOBAL VARIABLES ==============================*/
 /*============================ LOCAL VARIABLES ===============================*/
