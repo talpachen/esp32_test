@@ -34,88 +34,13 @@
 #define VSF_KERNEL_CFG_NON_STANDALONE                   ENABLED
 
 #define VSF_USE_FIFO                                    ENABLED
-#define VSF_USE_JSON                                    ENABLED
 
-// Application configure
-#define APP_USE_LINUX_DEMO                              DISABLED
-#   define APP_USE_LINUX_MOUNT_FILE_DEMO                DISABLED
-#define APP_USE_USBH_DEMO                               DISABLED
-#   define APP_USE_DFU_HOST_DEMO                        DISABLED
-#define APP_USE_USBD_DEMO                               DISABLED
-#   define APP_USE_USBD_CDC_DEMO                        DISABLED
-#   define APP_USE_USBD_MSC_DEMO                        DISABLED
-#   define APP_USE_USBD_UVC_DEMO                        DISABLED
-#   define APP_USE_USBD_USER_DEMO                       DISABLED
-#define APP_USE_SCSI_DEMO                               DISABLED
-#define APP_USE_AUDIO_DEMO                              DISABLED
-#define APP_USE_TGUI_DEMO                               DISABLED
-#define APP_USE_SDL2_DEMO                               DISABLED
-#define APP_USE_KERNEL_TEST                             DISABLED
-#define APP_USE_JSON_DEMO                               DISABLED
-
-// VSF_LINUX_USE_SIMPLE_LIBC conflicts with c++
-#define APP_USE_CPP_DEMO                                DISABLED
-#define VSF_LINUX_USE_SIMPLE_LIBC                       DISABLED
-// if VSF_LINUX_USE_SIMPLE_LIBC is enabled, need VSF_USE_SIMPLE_SSCANF and VSF_USE_SIMPLE_SPRINTF
-#define VSF_USE_SIMPLE_SSCANF                           DISABLED
-#define VSF_USE_SIMPLE_SPRINTF                          DISABLED
-
-// 3rd-party demos
-#define APP_USE_XBOOT_XUI_DEMO                          DISABLED
-#define APP_USE_AWTK_DEMO                               DISABLED
-#define APP_USE_NNOM_DEMO                               DISABLED
-#define APP_USE_LVGL_DEMO                               DISABLED
-#   define APP_LVGL_DEMO_CFG_TOUCH_REMAP                DISABLED
-#   define APP_LVGL_DEMO_CFG_FREETYPE                   ENABLED
-#   define APP_LVGL_DEMO_CFG_FREETYPE_MAX_FACES         4
-#   define APP_LVGL_DEMO_CFG_COLOR_DEPTH                16
-#   define APP_LVGL_DEMO_CFG_HOR_RES                    256
-#   define APP_LVGL_DEMO_CFG_VER_RES                    256
-#define APP_USE_BTSTACK_DEMO                            DISABLED
-#define APP_USE_VSFVM_DEMO                              DISABLED
-// select one for tcpip stack
-#define APP_USE_VSFIP_DEMO                              DISABLED
-#define APP_USE_LWIP_DEMO                               DISABLED
-#define APP_USE_SOCKET_DEMO                             DISABLED
-#define APP_USE_GATO_DEMO                               DISABLED
-#define APP_USE_NUKLEAR_DEMO                            DISABLED
-
-#if APP_USE_TGUI_DEMO == ENABLED || APP_USE_XBOOT_XUI_DEMO == ENABLED || APP_LVGL_DEMO_CFG_FREETYPE == ENABLED
-#   define APP_USE_FREETYPE_DEMO                        ENABLED
-#endif
 
 // component configure
 #define VSF_USE_HEAP                                    ENABLED
 #   define VSF_HEAP_CFG_MCB_MAGIC_EN                    ENABLED
 #   define VSF_HEAP_SIZE                                0x1000
 #   define VSF_HEAP_CFG_MCB_ALIGN_BIT                   12      // 4K alignment
-
-#define VSF_USE_VIDEO                                   DISABLED
-#define VSF_USE_AUDIO                                   DISABLED
-#   define VSF_AUDIO_USE_DECODER_WAV                    DISABLED
-#   define VSF_AUDIO_USE_PLAY                           DISABLED
-#   define VSF_AUDIO_USE_CATURE                         DISABLED
-
-// UI runs in vsf_prio_0, other modules runs above vsf_prio_1
-#if APP_USE_AWTK_DEMO == ENABLED || APP_USE_LVGL_DEMO == ENABLED || APP_USE_XBOOT_XUI_DEMO == ENABLED || APP_USE_TGUI_DEMO == ENABLED
-#   if VSF_ARCH_SWI_NUM == 0
-#       define VSF_USBH_CFG_EDA_PRIORITY                vsf_prio_0
-#   else
-#       define VSF_USBH_CFG_EDA_PRIORITY                vsf_prio_1
-#   endif
-#   if VSF_ARCH_PRI_NUM == 1
-#       define APP_CFG_USBH_HW_PRIO                     vsf_arch_prio_0
-#   else
-#       define APP_CFG_USBH_HW_PRIO                     vsf_arch_prio_1
-#   endif
-#endif
-
-#define VSF_USE_INPUT                                   DISABLED
-#   define VSF_INPUT_USE_HID                            ENABLED
-#   define VSF_INPUT_USE_DS4                            ENABLED
-#   define VSF_INPUT_USE_NSPRO                          ENABLED
-#   define VSF_INPUT_USE_XB360                          ENABLED
-#   define VSF_INPUT_USE_XB1                            ENABLED
 
 // VSF_USE_USB_DEVICE will be enabled if target chip supports USBD
 //#define VSF_USE_USB_DEVICE                              ENABLED
@@ -230,48 +155,6 @@
 //#define WEAK_VSF_DRIVER_INIT
 #define WEAK_VSF_HEAP_MALLOC_ALIGNED
 
-#if VSF_USE_LINUX == ENABLED
-#   define WEAK_VSF_LINUX_CREATE_FHS
-#endif
-
-#if APP_USE_BTSTACK_DEMO == ENABLED && APP_USE_USBH_DEMO == ENABLED
-#   define WEAK_VSF_USBH_BTHCI_ON_NEW
-#   define WEAK_VSF_USBH_BTHCI_ON_DEL
-#   define WEAK_VSF_USBH_BTHCI_ON_PACKET
-
-#   define WEAK_VSF_BLUETOOTH_H2_ON_NEW
-#endif
-
-#define WEAK_VSF_SCSI_ON_NEW
-#define WEAK_VSF_SCSI_ON_DELETE
-
-#if APP_USE_USBH_DEMO == ENABLED
-#   define WEAK_VSF_USBH_UAC_ON_NEW
-#endif
-
-#if APP_USE_VSFVM_DEMO == ENABLED
-#   define WEAK_VSF_PLUG_IN_ON_KERNEL_IDLE
-
-#   define WEAK_VSFVM_SET_BYTECODE_IMP
-#   define WEAK_VSFVM_GET_RES_IMP
-#   define WEAK_VSFVM_GET_BYTECODE_IMP
-#endif
-
-#if APP_USE_VSFIP_DEMO == ENABLED || APP_USE_LWIP_DEMO == ENABLED
-#   define WEAK_VSF_PNP_ON_NETDRV_CONNECT
-#   define WEAK_VSF_PNP_ON_NETDRV_CONNECTED
-
-#   if APP_USE_VSFIP_DEMO == ENABLED
-#       define WEAK_VSFIP_DHCPC_ON_FINISH
-
-#       define WEAK_VSFIP_MEM_SOCKET_GET
-#       define WEAK_VSFIP_MEM_SOCKET_FREE
-#       define WEAK_VSFIP_MEM_TCP_PCB_GET
-#       define WEAK_VSFIP_MEM_TCP_PCB_FREE
-#       define WEAK_VSFIP_MEM_NETBUF_GET
-#       define WEAK_VSFIP_MEM_NETBUF_FREE
-#   endif
-#endif
 
 /*============================ TYPES =========================================*/
 /*============================ GLOBAL VARIABLES ==============================*/
