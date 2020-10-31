@@ -25,6 +25,9 @@
 
 void app_main(void)
 {
+    vsf_freertos_start();
+
+    #if 0
     vsf_evtq_on_eda_init(NULL);
     vsf_pool_init(NULL, 0, 0, NULL);
 
@@ -51,4 +54,11 @@ void app_main(void)
     printf("Restarting now.\n");
     fflush(stdout);
     esp_restart();
+    #endif
+}
+
+int vsf_main(void)
+{
+
+    return 0;
 }
